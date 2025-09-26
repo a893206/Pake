@@ -60,11 +60,14 @@ export async function mergeConfig(
     hideOnClose,
     incognito,
     title,
+    wasm,
+    enableDragDrop,
   } = options;
 
   const { platform } = process;
 
-  // Set Windows parameters.
+  const platformHideOnClose = hideOnClose ?? platform === 'darwin';
+
   const tauriConfWindowOptions = {
     width,
     height,
@@ -75,9 +78,11 @@ export async function mergeConfig(
     always_on_top: alwaysOnTop,
     dark_mode: darkMode,
     disabled_web_shortcuts: disabledWebShortcuts,
-    hide_on_close: hideOnClose,
+    hide_on_close: platformHideOnClose,
     incognito: incognito,
     title: title || null,
+    enable_wasm: wasm,
+    enable_drag_drop: enableDragDrop,
   };
   Object.assign(tauriConf.pake.windows[0], { url, ...tauriConfWindowOptions });
 
@@ -85,11 +90,14 @@ export async function mergeConfig(
   tauriConf.identifier = identifier;
   tauriConf.version = appVersion;
 
+  if (platform === 'linux') {
+    tauriConf.mainBinaryName = `pake-${name.toLowerCase()}`;
+  }
+
   if (platform == 'win32') {
     tauriConf.bundle.windows.wix.language[0] = installerLanguage;
   }
 
-  //Judge the type of URL, whether it is a file or a website.
   const pathExists = await fsExtra.pathExists(url);
   if (pathExists) {
     logger.warn('✼ Your input might be a local file.');
@@ -153,8 +161,8 @@ Version=1.0
 Type=Application
 Name=${name}
 Comment=${name}
-Exec=${appNameLower}
-Icon=${appNameLower}
+Exec=pake-${appNameLower}
+Icon=${appNameLower}_512
 Categories=Network;WebBrowser;
 MimeType=text/html;text/xml;application/xhtml_xml;
 StartupNotify=true
@@ -172,9 +180,20 @@ StartupNotify=true
       [`/usr/share/applications/${desktopFileName}`]: `assets/${desktopFileName}`,
     };
 
-    const validTargets = ['deb', 'appimage', 'rpm'];
+    const validTargets = [
+      'deb',
+      'appimage',
+      'rpm',
+      'deb-arm64',
+      'appimage-arm64',
+      'rpm-arm64',
+    ];
+    const baseTarget = options.targets.includes('-arm64')
+      ? options.targets.replace('-arm64', '')
+      : options.targets;
+
     if (validTargets.includes(options.targets)) {
-      tauriConf.bundle.targets = [options.targets];
+      tauriConf.bundle.targets = [baseTarget];
     } else {
       logger.warn(
         `✼ The target must be one of ${validTargets.join(', ')}, the default 'deb' will be used.`,
@@ -234,7 +253,7 @@ StartupNotify=true
     }
 
     if (updateIconPath) {
-      tauriConf.bundle.icon = [options.icon];
+      tauriConf.bundle.icon = [iconInfo.path];
     } else {
       logger.warn(`✼ Icon will remain as default.`);
     }
@@ -284,13 +303,17 @@ StartupNotify=true
 
   // inject js or css files
   if (inject?.length > 0) {
+    // Ensure inject is an array before calling .every()
+    const injectArray = Array.isArray(inject) ? inject : [inject];
     if (
-      !inject.every((item) => item.endsWith('.css') || item.endsWith('.js'))
+      !injectArray.every(
+        (item) => item.endsWith('.css') || item.endsWith('.js'),
+      )
     ) {
       logger.error('The injected file must be in either CSS or JS format.');
       return;
     }
-    const files = inject.map((filepath) =>
+    const files = injectArray.map((filepath) =>
       path.isAbsolute(filepath) ? filepath : path.join(process.cwd(), filepath),
     );
     tauriConf.pake.inject = files;
@@ -300,6 +323,16 @@ StartupNotify=true
     await fsExtra.writeFile(injectFilePath, '');
   }
   tauriConf.pake.proxy_url = proxyUrl || '';
+
+  // Configure WASM support with required HTTP headers
+  if (wasm) {
+    tauriConf.app.security = {
+      headers: {
+        'Cross-Origin-Opener-Policy': 'same-origin',
+        'Cross-Origin-Embedder-Policy': 'require-corp',
+      },
+    };
+  }
 
   // Save config file.
   const platformConfigPaths: PlatformMap = {

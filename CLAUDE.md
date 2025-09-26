@@ -45,16 +45,16 @@ grep -r "window_config" src-tauri/src/
 
 ```bash
 # Install dependencies
-npm i
+pnpm i
 
-# Development with hot reload
-npm run dev
+# Development with hot reload (for testing app functionality)
+pnpm run dev
 
 # CLI development
-npm run cli:dev
+pnpm run cli:dev
 
 # Production build
-npm run build
+pnpm run build
 ```
 
 ### 3. Testing and Validation
@@ -63,16 +63,16 @@ npm run build
 
 ```bash
 # Run comprehensive test suite (unit + integration + builder)
-npm test
+pnpm test
 
 # Build CLI for testing
-npm run cli:build
+pnpm run cli:build
 
 # Debug build for development
-npm run build:debug
+pnpm run build:debug
 
 # Multi-platform testing
-npm run build:mac  # macOS universal build
+pnpm run build:mac  # macOS universal build
 ```
 
 **Testing Checklist:**
@@ -83,12 +83,14 @@ npm run build:mac  # macOS universal build
 - [ ] Check system tray integration
 - [ ] Validate window behavior
 - [ ] Test with weekly.tw93.fun URL
-- [ ] Verify remote icon functionality (https://gw.alipayobjects.com/os/k/fw/weekly.icns)
+- [ ] Verify remote icon functionality (https://cdn.tw93.fun/pake/weekly.icns)
 
 **Testing Notes:**
 
 - Do NOT use `PAKE_NO_CONFIG_OVERWRITE=1` - this environment variable is not implemented
-- For testing, simply use: `node dist/cli.js https://example.com --name TestApp --debug`
+- For CLI testing: `node dist/cli.js https://example.com --name TestApp --debug`
+- **For app functionality testing**: Use `pnpm run dev` to start development server with hot reload. This allows real-time testing of injected JavaScript changes without rebuilding the entire app.
+- The dev server automatically reloads when you modify files in `src-tauri/src/inject/` directory
 
 ## Core Components
 
@@ -108,7 +110,7 @@ npm run build:mac  # macOS universal build
 ## Documentation Guidelines
 
 - **Main README**: Only include common, frequently-used parameters to avoid clutter
-- **CLI Documentation** (`bin/README.md`): Include ALL parameters with detailed usage examples
+- **CLI Documentation** (`docs/cli-usage.md`): Include ALL parameters with detailed usage examples
 - **Rare/Advanced Parameters**: Should have full documentation in CLI docs but minimal/no mention in main README
 - **Examples of rare parameters**: `--title`, `--incognito`, `--system-tray-icon`, etc.
 
@@ -131,7 +133,7 @@ npm run build:mac  # macOS universal build
 
 ```bash
 # 1. Check logs
-npm run dev 2>&1 | grep -i error
+pnpm run dev 2>&1 | grep -i error
 
 # 2. Verify dependencies
 cargo check --manifest-path=src-tauri/Cargo.toml
@@ -185,6 +187,6 @@ cargo check --manifest-path=src-tauri/Cargo.toml
 
 ## Prerequisites
 
-- Node.js ≥22.0.0 (recommended LTS, older versions ≥16.0.0 may work)
+- Node.js ≥22.0.0 (recommended LTS, older versions ≥18.0.0 may work)
 - Rust ≥1.89.0 (recommended stable, older versions ≥1.78.0 may work)
 - Platform build tools (see CONTRIBUTING.md for details)

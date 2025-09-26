@@ -4,66 +4,95 @@ import { PakeAppOptions } from '@/types';
 import BaseBuilder from './BaseBuilder';
 
 export default class MacBuilder extends BaseBuilder {
+  private buildFormat: string;
+  private buildArch: string;
+
   constructor(options: PakeAppOptions) {
     super(options);
-    // Use DMG by default for distribution
-    // Only create app bundles for testing to avoid user interaction
+
+    const validArchs = ['intel', 'apple', 'universal', 'auto', 'x64', 'arm64'];
+    this.buildArch = validArchs.includes(options.targets || '')
+      ? options.targets
+      : 'auto';
+
     if (process.env.PAKE_CREATE_APP === '1') {
-      this.options.targets = 'app';
+      this.buildFormat = 'app';
     } else {
-      this.options.targets = 'dmg';
+      this.buildFormat = 'dmg';
     }
+
+    this.options.targets = this.buildFormat;
   }
 
   getFileName(): string {
     const { name } = this.options;
 
-    // For app bundles, use simple name without version/arch
-    if (this.options.targets === 'app') {
+    if (this.buildFormat === 'app') {
       return name;
     }
 
-    // For DMG files, use versioned filename
     let arch: string;
-    if (this.options.multiArch) {
+    if (this.buildArch === 'universal' || this.options.multiArch) {
       arch = 'universal';
+    } else if (this.buildArch === 'apple') {
+      arch = 'aarch64';
+    } else if (this.buildArch === 'intel') {
+      arch = 'x64';
     } else {
-      arch = process.arch === 'arm64' ? 'aarch64' : process.arch;
+      arch = this.getArchDisplayName(this.resolveTargetArch(this.buildArch));
     }
     return `${name}_${tauriConfig.version}_${arch}`;
   }
 
-  protected getBuildCommand(): string {
-    if (this.options.multiArch) {
-      const baseCommand = this.options.debug
-        ? 'npm run tauri build -- --debug'
-        : 'npm run tauri build --';
-
-      // Use temporary config directory to avoid modifying source files
-      const configPath = path.join('src-tauri', '.pake', 'tauri.conf.json');
-      let fullCommand = `${baseCommand} --target universal-apple-darwin -c "${configPath}"`;
-
-      // Add features
-      const features = ['cli-build'];
-
-      // Add macos-proxy feature for modern macOS (Darwin 23+ = macOS 14+)
-      const macOSVersion = this.getMacOSMajorVersion();
-      if (macOSVersion >= 23) {
-        features.push('macos-proxy');
-      }
-
-      if (features.length > 0) {
-        fullCommand += ` --features ${features.join(',')}`;
-      }
-
-      return fullCommand;
+  private getActualArch(): string {
+    if (this.buildArch === 'universal' || this.options.multiArch) {
+      return 'universal';
+    } else if (this.buildArch === 'apple') {
+      return 'arm64';
+    } else if (this.buildArch === 'intel') {
+      return 'x64';
     }
-    return super.getBuildCommand();
+    return this.resolveTargetArch(this.buildArch);
+  }
+
+  protected getBuildCommand(packageManager: string = 'pnpm'): string {
+    const configPath = path.join('src-tauri', '.pake', 'tauri.conf.json');
+    const actualArch = this.getActualArch();
+
+    const buildTarget = this.getTauriTarget(actualArch, 'darwin');
+    if (!buildTarget) {
+      throw new Error(`Unsupported architecture: ${actualArch} for macOS`);
+    }
+
+    let fullCommand = this.buildBaseCommand(
+      packageManager,
+      configPath,
+      buildTarget,
+    );
+
+    const features = this.getBuildFeatures();
+    if (features.length > 0) {
+      fullCommand += ` --features ${features.join(',')}`;
+    }
+
+    return fullCommand;
   }
 
   protected getBasePath(): string {
-    return this.options.multiArch
-      ? 'src-tauri/target/universal-apple-darwin/release/bundle'
-      : super.getBasePath();
+    const basePath = this.options.debug ? 'debug' : 'release';
+    const actualArch = this.getActualArch();
+    const target = this.getTauriTarget(actualArch, 'darwin');
+
+    return `src-tauri/target/${target}/${basePath}/bundle`;
+  }
+
+  protected hasArchSpecificTarget(): boolean {
+    return true;
+  }
+
+  protected getArchSpecificPath(): string {
+    const actualArch = this.getActualArch();
+    const target = this.getTauriTarget(actualArch, 'darwin');
+    return `src-tauri/target/${target}`;
   }
 }

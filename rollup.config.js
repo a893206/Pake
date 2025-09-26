@@ -45,11 +45,21 @@ export default {
     warn(warning);
   },
   plugins: [
-    json(),
     typescript({
-      tsconfig: "tsconfig.json",
-      clean: true, // Clear cache
+      tsconfig: "./tsconfig.json",
+      sourceMap: !isProduction,
+      inlineSources: !isProduction,
+      noEmitOnError: false,
+      compilerOptions: {
+        target: "es2020",
+        module: "esnext",
+        moduleResolution: "node",
+        esModuleInterop: true,
+        allowSyntheticDefaultImports: true,
+        strict: false,
+      },
     }),
+    json(),
     commonjs(),
     replace({
       "process.env.NODE_ENV": JSON.stringify(process.env.NODE_ENV),
